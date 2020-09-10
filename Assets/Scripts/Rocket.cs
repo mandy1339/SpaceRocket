@@ -1,22 +1,74 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System;
 
 public class Rocket : MonoBehaviour
 {
     private float _tiltValue;
     [SerializeField] private float rocketSideSpeed;
+    private SoundManager sm;
+    [SerializeField] private GameObject laser;
+    private List<GameObject> containerOfLasers = new List<GameObject>(2);
+    private Transform rocketGunTransform;
+    private GameManager gm;
+    public static event Action<Rocket> OnRocketLoopRight = delegate { };
+    public static event Action<Rocket> OnRocketLoopLeft = delegate { };
+    [SerializeField] private float rotationLerpFactor = 10;
+
 
     // Start is called before the first frame update
     void Start()
     {
-        
+        sm = GameObject.FindGameObjectWithTag("sound_manager_tag").GetComponent<SoundManager>();
+        rocketGunTransform = this.transform.GetChild(2);
+        gm = GameObject.FindGameObjectWithTag("game_manager_tag").GetComponent<GameManager>();
+        GameObject tempLaser = Instantiate(laser);
+        tempLaser.SetActive(false);
+        containerOfLasers.Add(tempLaser);
+        tempLaser = Instantiate(laser);
+        tempLaser.SetActive(false);
+        containerOfLasers.Add(tempLaser);
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        // SIDE LOOPING LOGIC
+        if (this.transform.position.x > 5)
+        {
+            this.transform.position = new Vector3(this.transform.position.x - 10, this.transform.position.y, this.transform.position.z);
+            // FIRE EVENT FOR LOOPING ON THE RIGHT
+            OnRocketLoopRight(this);
+        }
+        else if (this.transform.position.x < -5)
+        {
+            this.transform.position = new Vector3(this.transform.position.x + 10, this.transform.position.y, this.transform.position.z);
+            // FIRE EVENT FOR LOOPING ON THE LEFT
+            OnRocketLoopLeft(this);
+        }
+
+        // LASER SHOOT LOGIC
+        if (Input.GetMouseButtonDown(0))
+        {
+            if(gm.isReadyToShootLaser() && !gm.IsGameOver())
+            {
+                sm.PlayLaserSound();
+                //Instantiate(laser, rocketGunTransform.position, this.transform.rotation);
+                GameObject extractedLaser = containerOfLasers[0];
+                containerOfLasers.RemoveAt(0);
+                extractedLaser.SetActive(true);
+                extractedLaser.transform.position = rocketGunTransform.position;
+                extractedLaser.transform.rotation = rocketGunTransform.rotation;
+                gm.LaserCooldownStart();
+            }
+        }
+    }
+
+    public void StoreLaser(GameObject lzr)
+    {
+        this.containerOfLasers.Add(lzr);
+        lzr.SetActive(false);
     }
 
     private void FixedUpdate()
@@ -77,6 +129,7 @@ public class Rocket : MonoBehaviour
             }
         }
 
+        // HANDLE ROCKET ROTATION
         //transform.Rotate(Vector3.forward * _tiltValue * Time.fixedDeltaTime * -1);
         float cappedTiltValue = _tiltValue;
         if(_tiltValue < -15)
@@ -87,6 +140,8 @@ public class Rocket : MonoBehaviour
         {
             cappedTiltValue = 15;
         }
-        transform.eulerAngles = new Vector3(0,0, -cappedTiltValue * 1.2f);
+        // transform.eulerAngles = new Vector3(0,0, -cappedTiltValue * 1.2f);
+        transform.eulerAngles = new Vector3(0, 0, Mathf.LerpAngle(transform.eulerAngles.z, -cappedTiltValue * 1.2f, rotationLerpFactor * Time.deltaTime) );
     }
+
 }

@@ -7,6 +7,8 @@ TagManager:
   - rocket_tag
   - game_manager_tag
   - sound_manager_tag
+  - obstacle_tag
+  - score_bar_tag
   layers:
   - Default
   - TransparentFX
