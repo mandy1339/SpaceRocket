@@ -11,13 +11,17 @@ public class GameManager : MonoBehaviour
 {
     private int _score;
     private bool _readyToShootLaser;
+    private float _maxCoolDown = 8;
     [SerializeField] private float _spawnFrequency = 5;
     private float timeLeftToGenerate = 0;
     [SerializeField] private float timeMultiplier = 1;
     [SerializeField] private GameObject rocket;
+    private Animator rocketAnimator;
     [SerializeField] private TMP_Text scoreText;
     [SerializeField] private TMP_Text gameOverScoreTextPTS;
     [SerializeField] private TMP_Text gameOverHighScoreTextPTS;
+    [SerializeField] private TMP_Text winGameScoreTextPTS;
+    [SerializeField] private TMP_Text winGameHighScoreTextPTS;
     [SerializeField] private TMP_Text text321;
     private int text321Int;
     private GameObject rocketSprite;
@@ -32,6 +36,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject laserBar;
     [SerializeField] private Image redFillBar;
     [SerializeField] private GameObject redGlow;
+    private GameObject planetEarthReference;         // this will be null until it's instantiated on level cleared
+    [SerializeField] private GameObject planetEarth;    // wired prefab 
+    [SerializeField] private GameObject winGameUI;
 
     private SoundManager sm;
     private bool _IsGameOver = false;
@@ -62,9 +69,20 @@ public class GameManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        // TODO DELETE THIS
+        PlayerPrefs.SetInt("HighScore", 0);
+        
+        
         // Disable rocket controls
         rocket.GetComponent<Rocket>().enabled = false;
-        rocket.SetActive(false);
+        rocketAnimator = rocket.GetComponent<Animator>();
+        rocketAnimator.enabled = false;
+        
+
+        
+
+
+
         text321Int = 3;
         _readyToShootLaser = false;
         Time.timeScale = 0;
@@ -74,6 +92,7 @@ public class GameManager : MonoBehaviour
         gameOverUI.SetActive(false);
         howToPlayUI.SetActive(false);
         creditsUI.SetActive(false);
+        winGameUI.SetActive(false);
         ui321.SetActive(false);
         sm = GameObject.FindGameObjectWithTag("sound_manager_tag").GetComponent<SoundManager>();
         sm.PlayMainMenuMusic();
@@ -137,6 +156,7 @@ public class GameManager : MonoBehaviour
             obst7List.Add(Instantiate(tempObj));
         }
 
+
     }
 
     // ---------------
@@ -173,9 +193,9 @@ public class GameManager : MonoBehaviour
     IEnumerator CoroutineMoveRocketUp()
     {
         // y: -3.5
-        while(Vector3.Distance(rocket.transform.position, new Vector3(0, -3.5f, 0)) > 0.05f) 
+        while(Vector3.Distance(rocket.transform.position, new Vector3(rocket.transform.position.x, -3.5f, rocket.transform.position.z)) > 0.05f) 
         {
-            rocket.transform.position = Vector3.Lerp(rocket.transform.position, new Vector3(0, -3.5f, 0), 1f * Time.deltaTime);
+            rocket.transform.position = Vector3.Lerp(rocket.transform.position, new Vector3(rocket.transform.position.x, -3.5f, rocket.transform.position.z), 1f * Time.deltaTime);
             yield return null;
         }
         yield return null;
@@ -183,17 +203,55 @@ public class GameManager : MonoBehaviour
 
     IEnumerator CoroutineFillRedBar()
     {
-        float cooldown = 1f;
-        while (cooldown > 0)
+        float countDown = _maxCoolDown;       // maxCoolDown can be changed from outside that's why I cache it first to not affect the current cooldown calculations
+        float initialCountDown = _maxCoolDown;
+        while (countDown > 0)
         {
-            cooldown -= Time.deltaTime;
-            redFillBar.fillAmount = (1 - cooldown) / 1;
+            countDown -= Time.deltaTime;
+            redFillBar.fillAmount = (initialCountDown - countDown) / initialCountDown;
             yield return null;
         }
         _readyToShootLaser = true;
         redGlow.SetActive(true);
         yield return null;
     }
+
+    IEnumerator CoroutineMovePlanetEarth()
+    {
+        while (Vector3.Distance(planetEarthReference.transform.position, new Vector3(0,-0.5f,0)) > 0.05f)
+        {
+            planetEarthReference.transform.position = Vector3.Lerp(planetEarthReference.transform.position, new Vector3(0, -.05f, 0), Time.deltaTime * .4f);
+            yield return null;
+        }
+        yield return null;
+    }
+
+    IEnumerator CoroutineLerpRocketX0()
+    {
+        while(Vector3.Distance(rocket.transform.position, new Vector3(0, rocket.transform.position.y, rocket.transform.position.z)) > 0.05f)
+        {
+            rocket.transform.position = Vector3.Lerp(rocket.transform.position, new Vector3(0, rocket.transform.position.y, rocket.transform.position.z), 1f * Time.deltaTime);
+            yield return null;
+        }
+        yield return null;
+    }
+
+    IEnumerator DiplayWinGameUIAfterShortDelay()
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (i == 1)
+            {
+                winGameUI.SetActive(true);
+            }
+            else
+            {
+                yield return new WaitForSeconds(5);
+            }
+        }
+        yield return null;
+    }
+
     // ----------------------
     // END OF COROUTINES
     // ----------------
@@ -201,18 +259,18 @@ public class GameManager : MonoBehaviour
 
 
 
-    
+
     void Update()
     {
-        if (!_IsGameOver)
-            Time.timeScale = timeMultiplier;
+//        if (!_IsGameOver)
+//            Time.timeScale = timeMultiplier;
 
-#if UNITY_EDITOR
-        Time.timeScale = timeMultiplier;
-#endif
+//#if UNITY_EDITOR
+//        Time.timeScale = timeMultiplier;
+//#endif
 
         timeLeftToGenerate -= Time.deltaTime;
-        if(timeLeftToGenerate <= 0)
+        if(timeLeftToGenerate <= 0 && !_IsGameOver)
         {
             IncrementScore();
             timeLeftToGenerate = _spawnFrequency;
@@ -269,18 +327,28 @@ public class GameManager : MonoBehaviour
 
     public void LevelCleared()
     {
-        Time.timeScale = 0;
+        rocket.GetComponent<CapsuleCollider2D>().enabled = false;   // you can't crash after you win the game if the collider is disabled
+        sm.StopBackgroundMusic();
+        sm.PlayWinGameSound();
+        //winGameUI.SetActive(true);
+        StartCoroutine(DiplayWinGameUIAfterShortDelay());
+        rocketAnimator.enabled = true;
+        planetEarthReference = Instantiate(planetEarth, new Vector3(0, 7.5f, 0), Quaternion.identity);
+        // call coroutine to lerp rocket to x position 0
+        StartCoroutine(CoroutineLerpRocketX0());
+        // call coroutine to lerp down the earth
+        StartCoroutine(CoroutineMovePlanetEarth());
+
         rocket.GetComponent<Rocket>().enabled = false;
         playUI.SetActive(false);
-        gameOverUI.SetActive(true);
         _IsGameOver = true;
-        gameOverScoreTextPTS.text = _score.ToString();
+        winGameScoreTextPTS.text = _score.ToString();
         int historyHighScore = PlayerPrefs.GetInt("HighScore", 0);
         if (_score > historyHighScore)
         {
             PlayerPrefs.SetInt("HighScore", _score);
         }
-        gameOverHighScoreTextPTS.text = PlayerPrefs.GetInt("HighScore", 0).ToString();
+        winGameHighScoreTextPTS.text = PlayerPrefs.GetInt("HighScore", 0).ToString();
     }
 
     public void OnClickRestartButton()
@@ -444,9 +512,9 @@ public class GameManager : MonoBehaviour
                 SpaceObjectProperties tempObj = new SpaceObjectProperties();
                 int objNumber = 4;
                 float baseSpeed = 4f;
-                float speedDifference = Random.value * 2 - 1; // float between -1 and 1
+                float speedDifference = Random.value * 2.2f - 1; // float between -1 and 1
                 float rotationSpeed = Random.value * 200 - 75;
-                bool willSpawn = Random.value <= .58f ? true : false;
+                bool willSpawn = Random.value <= .46f ? true : false;
                 tempObj.objNumber = objNumber;
                 tempObj.baseSpeed = baseSpeed;
                 tempObj.speedDifference = speedDifference;
@@ -464,10 +532,10 @@ public class GameManager : MonoBehaviour
                 // TODO Randomly generate all of these except maybe o   bjNumber
                 SpaceObjectProperties tempObj = new SpaceObjectProperties();
                 int objNumber = 5;
-                float baseSpeed = 4.3f;
-                float speedDifference = Random.value * 2 - 1; // float between -1 and 1
+                float baseSpeed = 4.6f;
+                float speedDifference = Random.value * 2.2f - 1; // float between -1 and 1
                 float rotationSpeed = Random.value * 200 - 75;
-                bool willSpawn = Random.value <= .72f ? true : false;
+                bool willSpawn = Random.value <= .81f ? true : false;
                 tempObj.objNumber = objNumber;
                 tempObj.baseSpeed = baseSpeed;
                 tempObj.speedDifference = speedDifference;
@@ -485,10 +553,10 @@ public class GameManager : MonoBehaviour
                 // TODO Randomly generate all of these except maybe objNumber
                 SpaceObjectProperties tempObj = new SpaceObjectProperties();
                 int objNumber = 6;
-                float baseSpeed = 4.75f;
-                float speedDifference = Random.value * 2 - 1; // float between -1 and 1
+                float baseSpeed = 4.95f;
+                float speedDifference = Random.value * 2 - 1; 
                 float rotationSpeed = Random.value * 200 - 75;
-                bool willSpawn = Random.value <= .66f ? true : false;
+                bool willSpawn = Random.value <= .71f ? true : false;
                 tempObj.objNumber = objNumber;
                 tempObj.baseSpeed = baseSpeed;
                 tempObj.speedDifference = speedDifference;
@@ -506,10 +574,10 @@ public class GameManager : MonoBehaviour
                 // TODO Randomly generate all of these except maybe objNumber
                 SpaceObjectProperties tempObj = new SpaceObjectProperties();
                 int objNumber = 7;
-                float baseSpeed = 5.2f;
-                float speedDifference = Random.value * 2.1f - 1; // float between -1 and 1
+                float baseSpeed = 5.7f;
+                float speedDifference = Random.value * 2.1f - 1; 
                 float rotationSpeed = Random.value * 200 - 75;
-                bool willSpawn = Random.value <= .72f ? true : false;
+                bool willSpawn = Random.value <= .78f ? true : false;
                 tempObj.objNumber = objNumber;
                 tempObj.baseSpeed = baseSpeed;
                 tempObj.speedDifference = speedDifference;

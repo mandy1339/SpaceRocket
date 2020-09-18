@@ -12,6 +12,7 @@ public class SoundManager : MonoBehaviour
     private AudioSource spaceEngine;
     private AudioSource laserSound;
     private AudioSource explosionObst;      // obstacle explosion
+    private AudioSource winGameSound;
 
     // Start is called before the first frame update
     void Start()
@@ -24,6 +25,7 @@ public class SoundManager : MonoBehaviour
         spaceEngine = sounds[4];
         laserSound = sounds[5];
         explosionObst = sounds[6];
+        winGameSound = sounds[7];
     }
 
     // Update is called once per frame
@@ -71,5 +73,9 @@ public class SoundManager : MonoBehaviour
     public void PlayExplosionObstSound()
     {
         explosionObst.Play();
+    }
+    public void PlayWinGameSound()
+    {
+        winGameSound.Play();
     }
 }
